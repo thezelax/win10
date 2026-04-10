@@ -1,143 +1,112 @@
 #!/bin/bash
-set -euo pipefail
 
-# =========================
-# CONFIG
-# =========================
-DISK="/dev/sda"
-PART1="${DISK}1"
-PART2="${DISK}2"
+#apt update -y && apt upgrade -y
 
-WIN_ISO_URL="https://bit.ly/4aCjkM2"
-WIN_ISO_NAME="win10.iso"
+apt install grub2 wimtools ntfs-3g gdisk rsync wget parted -y
 
-VIRTIO_ISO_URL="https://bit.ly/4d1g7Ht"
-VIRTIO_ISO_NAME="virtio.iso"
+#Get the disk size in GB and convert to MB
+#disk_size_gb=$(parted /dev/sda --script print | awk '/^Disk \/dev\/sda:/ {print int($3)}')
+#disk_size_mb=$((disk_size_gb * 1024))
 
-USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+#Calculate partition size (25% of total size)
+#part_size_mb=$((disk_size_mb / 4))
 
-MNT="/mnt"
-WINDISK="/root/windisk"
-ISO_MOUNT="${WINDISK}/winfile"
+#Create GPT partition table
+parted /dev/sda --script -- mklabel gpt
 
-# =========================
-# WARN
-# =========================
-echo "[!] WARNING: This will completely erase ${DISK}"
-sleep 3
+#Create two partitions
+parted /dev/sda --script -- mkpart primary ntfs 1MB 51200MB
+parted /dev/sda --script -- mkpart primary ntfs 51200MB 92160MB
 
-# =========================
-# INSTALL REQUIRED PACKAGES
-# =========================
-export DEBIAN_FRONTEND=noninteractive
-apt update -y
-apt install -y grub2 wimtools ntfs-3g gdisk parted rsync wget
+#Inform kernel of partition table changes
+partprobe /dev/sda
 
-# =========================
-# CLEANUP FUNCTION
-# =========================
-cleanup() {
-    set +e
-    umount "${ISO_MOUNT}" 2>/dev/null || true
-    umount "${MNT}" 2>/dev/null || true
-}
-trap cleanup EXIT
+sleep 60
 
-# =========================
-# PREPARE DISK
-# =========================
-umount "${PART1}" 2>/dev/null || true
-umount "${PART2}" 2>/dev/null || true
+partprobe /dev/sda
 
-parted "${DISK}" --script mklabel gpt
-parted "${DISK}" --script mkpart primary ntfs 1MiB 51200MiB
-parted "${DISK}" --script mkpart primary ntfs 51200MiB 92160MiB
+sleep 60
 
-partprobe "${DISK}"
-sleep 5
+partprobe /dev/sda
 
-mkfs.ntfs -f "${PART1}"
-mkfs.ntfs -f "${PART2}"
+sleep 60 
 
-echo "[+] NTFS partitions created"
+#Format the partitions
+mkfs.ntfs -f /dev/sda1
+mkfs.ntfs -f /dev/sda2
 
-# Hybrid MBR for BIOS boot compatibility
-echo -e "r\ng\np\nw\nY\n" | gdisk "${DISK}"
+sleep 60 
 
-sleep 3
-partprobe "${DISK}"
-sleep 3
+echo "NTFS partitions created"
 
-# =========================
-# MOUNT PARTITIONS
-# =========================
-mkdir -p "${MNT}"
-mount "${PART1}" "${MNT}"
+echo -e "r\ng\np\nw\nY\n" | gdisk /dev/sda
 
-mkdir -p "${WINDISK}"
-mkdir -p "${ISO_MOUNT}"
-mount "${PART2}" "${WINDISK}"
+sleep 30 
 
-# =========================
-# INSTALL GRUB
-# =========================
-grub-install --target=i386-pc --boot-directory="${MNT}/boot" "${DISK}"
+mount /dev/sda1 /mnt
 
-cat > "${MNT}/boot/grub/grub.cfg" <<'EOF'
+sleep 30 
+
+#Prepare directory for the Windows disk
+cd ~
+mkdir -p windisk
+
+mount /dev/sda2 windisk
+
+sleep 30 
+
+grub-install --root-directory=/mnt /dev/sda
+
+sleep 30 
+
+#Edit GRUB configuration
+cd /mnt/boot/grub
+cat <<EOF > grub.cfg
 menuentry "windows installer" {
-    insmod ntfs
-    search --set=root --file /bootmgr
-    ntldr /bootmgr
-    boot
+	insmod ntfs
+	search --set=root --file=/bootmgr
+	ntldr /bootmgr
+	boot
 }
 EOF
 
-echo "[+] GRUB installed"
+cd /root/windisk
 
-# =========================
-# DOWNLOAD WINDOWS ISO
-# =========================
-cd "${WINDISK}"
+mkdir -p winfile
 
-wget -O "${WIN_ISO_NAME}" --user-agent="${USER_AGENT}" "${WIN_ISO_URL}"
+#Windows 10 CN
+#wget -O win10.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" http://bit.ly/4fLnOSY
+#Windows 10 JP
+#wget -O win10.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/49qp1gl
+#windows2019_jp
+#wget -O win2019_jp.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/3OxXX4M
+#windows2022_en
+wget -O win2022_en.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/4aCjkM2
+#windows2022_jp
+#wget -O win2022_jp.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/4ayiEIf
 
-# =========================
-# COPY WINDOWS FILES
-# =========================
-mount -o loop "${WIN_ISO_NAME}" "${ISO_MOUNT}"
-rsync -avh --progress "${ISO_MOUNT}/" "${MNT}/"
-umount "${ISO_MOUNT}"
+mount -o loop win2022_en.iso winfile
 
-echo "[+] Windows installer files copied"
+rsync -avz --progress winfile/* /mnt
 
-# =========================
-# DOWNLOAD VIRTIO ISO
-# =========================
-wget -O "${VIRTIO_ISO_NAME}" "${VIRTIO_ISO_URL}"
+umount winfile
 
-mount -o loop "${VIRTIO_ISO_NAME}" "${ISO_MOUNT}"
+wget -O virtio.iso https://bit.ly/4d1g7Ht
 
-mkdir -p "${MNT}/sources/virtio"
-rsync -avh --progress "${ISO_MOUNT}/" "${MNT}/sources/virtio/"
-umount "${ISO_MOUNT}"
+mount -o loop virtio.iso winfile
 
-echo "[+] VirtIO drivers copied"
+mkdir -p /mnt/sources/virtio
 
-# =========================
-# INJECT VIRTIO INTO BOOT.WIM
-# =========================
-cd "${MNT}/sources"
+rsync -avz --progress winfile/* /mnt/sources/virtio
 
-cat > cmd.txt <<'EOF'
-add virtio /virtio_drivers
-EOF
+umount winfile
+
+cd /mnt/sources
+
+touch cmd.txt
+
+echo 'add virtio /virtio_drivers' >> cmd.txt
 
 wimlib-imagex update boot.wim 2 < cmd.txt
 
-echo "[+] boot.wim updated with VirtIO drivers"
-
-sync
-
-echo "[+] Done"
-echo "[+] Reboot when ready"
-# reboot
+#reboot
