@@ -2,7 +2,7 @@
 
 #apt update -y && apt upgrade -y
 
-apt install grub2 wimtools ntfs-3g gdisk rsync wget parted -y
+apt install grub2 wimtools ntfs-3g -y
 
 #Get the disk size in GB and convert to MB
 #disk_size_gb=$(parted /dev/sda --script print | awk '/^Disk \/dev\/sda:/ {print int($3)}')
@@ -49,7 +49,7 @@ sleep 30
 
 #Prepare directory for the Windows disk
 cd ~
-mkdir -p windisk
+mkdir windisk
 
 mount /dev/sda2 windisk
 
@@ -72,18 +72,18 @@ EOF
 
 cd /root/windisk
 
-mkdir -p winfile
+mkdir winfile
 
 #Windows 10 CN
 #wget -O win10.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" http://bit.ly/4fLnOSY
 #Windows 10 JP
 #wget -O win10.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/49qp1gl
 #windows2019_jp
-#wget -O win2019_jp.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/3OxXX4M
-#windows2022_en
-wget -O win2022_en.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/4aCjkM2
+#wget -O win10.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/3OxXX4M
 #windows2022_jp
 #wget -O win2022_jp.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/4ayiEIf
+#windows2022_en
+wget -O win2022_en.iso --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" https://bit.ly/4aCjkM2
 
 mount -o loop win2022_en.iso winfile
 
@@ -95,11 +95,9 @@ wget -O virtio.iso https://bit.ly/4d1g7Ht
 
 mount -o loop virtio.iso winfile
 
-mkdir -p /mnt/sources/virtio
+mkdir /mnt/sources/virtio
 
 rsync -avz --progress winfile/* /mnt/sources/virtio
-
-umount winfile
 
 cd /mnt/sources
 
